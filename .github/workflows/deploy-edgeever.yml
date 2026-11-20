@@ -69,3 +69,20 @@ jobs:
           jq -e '.ok == true' /tmp/health.json
           curl -fsS --retry 5 --retry-delay 3 "$base/api/openapi.json" > /tmp/openapi.json
           jq -e '.ok == true' /tmp/openapi.json
+
+      - name: Verify administrator login
+        env:
+          EDGE_EVER_AUTH_PASSWORD: ${{ secrets.EDGE_EVER_AUTH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EDGE_EVER_AUTH_PASSWORD:-}" ]; then
+            echo "EDGE_EVER_AUTH_PASSWORD secret is not set; skipping login verification."
+            exit 0
+          fi
+          base="https://edgeever.16868487003551.workers.dev"
+          payload="$(jq -n --arg username admin --arg password "$EDGE_EVER_AUTH_PASSWORD" '{username:$username,password:$password}')"
+          code="$(curl -sS -o /tmp/login.json -w '%{http_code}' --retry 3 --retry-delay 3 \
+            -X POST "$base/api/v1/auth/login" -H 'content-type: application/json' --data "$payload")"
+          jq '{authenticated, user: {username: .user.username, role: .user.role}}' /tmp/login.json
+          [ "$code" = "200" ]
+          jq -e '.authenticated == true and .user.username == "admin"' /tmp/login.json
