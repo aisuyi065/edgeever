@@ -29,8 +29,8 @@ jobs:
       EDGE_EVER_D1_DATABASE_NAME: edgeever
       EDGE_EVER_D1_DATABASE_ID: cf848dec-bbb2-4069-b6c9-c92df3b66847
       EDGE_EVER_R2_BUCKET_NAME: edgeever-resources
-      EDGE_EVER_AUTH_USERNAME: admin
-      EDGE_EVER_DEPLOYMENT_URL: https://edgeever.16868487003551.workers.dev
+      EDGE_EVER_AUTH_USERNAME: aisuyi
+      EDGE_EVER_DEPLOYMENT_URL: https://biji.nof1.de
       EDGE_EVER_DEPLOYMENT_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'main_push' }}
       EDGE_EVER_DEPLOYMENT_METHOD: github_actions
 
@@ -64,7 +64,7 @@ jobs:
       - name: Verify health and OpenAPI
         run: |
           set -euo pipefail
-          base="https://edgeever.16868487003551.workers.dev"
+          base="https://biji.nof1.de"
           curl -fsS --retry 5 --retry-delay 3 "$base/api/health" | tee /tmp/health.json
           jq -e '.ok == true' /tmp/health.json
           curl -fsS --retry 5 --retry-delay 3 "$base/api/openapi.json" > /tmp/openapi.json
@@ -79,10 +79,10 @@ jobs:
             echo "EDGE_EVER_AUTH_PASSWORD secret is not set; skipping login verification."
             exit 0
           fi
-          base="https://edgeever.16868487003551.workers.dev"
-          payload="$(jq -n --arg username admin --arg password "$EDGE_EVER_AUTH_PASSWORD" '{username:$username,password:$password}')"
+          base="https://biji.nof1.de"
+          payload="$(jq -n --arg username aisuyi --arg password "$EDGE_EVER_AUTH_PASSWORD" '{username:$username,password:$password}')"
           code="$(curl -sS -o /tmp/login.json -w '%{http_code}' --retry 3 --retry-delay 3 \
             -X POST "$base/api/v1/auth/login" -H 'content-type: application/json' --data "$payload")"
           jq '{authenticated, user: {username: .user.username, role: .user.role}}' /tmp/login.json
           [ "$code" = "200" ]
-          jq -e '.authenticated == true and .user.username == "admin"' /tmp/login.json
+          jq -e '.authenticated == true and .user.username == "aisuyi"' /tmp/login.json
