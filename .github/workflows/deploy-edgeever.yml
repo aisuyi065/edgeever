@@ -1,0 +1,71 @@
+name: Deploy EdgeEver
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["Update deployed EdgeEver"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edgeever-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: Build and deploy edgeever
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      EDGE_EVER_WORKER_NAME: edgeever
+      EDGE_EVER_D1_DATABASE_NAME: edgeever
+      EDGE_EVER_D1_DATABASE_ID: cf848dec-bbb2-4069-b6c9-c92df3b66847
+      EDGE_EVER_R2_BUCKET_NAME: edgeever-resources
+      EDGE_EVER_AUTH_USERNAME: admin
+      EDGE_EVER_DEPLOYMENT_URL: https://edgeever.16868487003551.workers.dev
+      EDGE_EVER_DEPLOYMENT_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'main_push' }}
+      EDGE_EVER_DEPLOYMENT_METHOD: github_actions
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if bun install --frozen-lockfile; then
+              exit 0
+            fi
+            if [[ "$attempt" = "3" ]]; then
+              exit 1
+            fi
+            sleep "$((15 * attempt))"
+          done
+
+      - name: Build, migrate and deploy
+        run: bun run deploy
+
+      - name: Verify health and OpenAPI
+        run: |
+          set -euo pipefail
+          base="https://edgeever.16868487003551.workers.dev"
+          curl -fsS --retry 5 --retry-delay 3 "$base/api/health" | tee /tmp/health.json
+          jq -e '.ok == true' /tmp/health.json
+          curl -fsS --retry 5 --retry-delay 3 "$base/api/openapi.json" > /tmp/openapi.json
+          jq -e '.ok == true' /tmp/openapi.json
